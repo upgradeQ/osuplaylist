@@ -12,6 +12,8 @@ parser.parse_args()
 def get_songs():
     cur = ABSPATH_TO_SONGS
     songdirs = [i for i in [j for j in os.walk(cur)][0][1] if i.split()[0].isdigit()]
+    # fix empty difficulties
+    songdirs = [i for i in songdirs if list(Path(i).glob("*.osu"))]
     paths = [os.path.join(cur, i) for i in songdirs]
     audios = []
     osufiles = []
@@ -45,4 +47,4 @@ with open("playlist.m3u8", "w", encoding="utf8") as playlist:
         song_path = str(namedict[sn].resolve()) + "\n"
         playlist.write(song_path)
 print("Playlist created,available songs:", len(names))
-#os.system("mpv --playlist=playlist.m3u8 --shuffle --volume 35")
+# os.system("mpv --playlist=playlist.m3u8 --shuffle --volume 35")
