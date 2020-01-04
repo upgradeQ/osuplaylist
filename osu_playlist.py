@@ -1,6 +1,5 @@
 ##### PUT THIS FILE IN OSU/SONGS FOLDER #####
 ABSPATH_TO_SONGS = "."
-import os
 from pathlib import Path
 import argparse
 
@@ -10,11 +9,11 @@ parser.parse_args()
 
 
 def get_songs():
-    cur = ABSPATH_TO_SONGS
-    songdirs = [i for i in [j for j in os.walk(cur)][0][1] if i.split()[0].isdigit()]
+    p = Path(ABSPATH_TO_SONGS)
+    songdirs = [str(i) for i in p.iterdir() if str(i).split()[0].isdigit() ]
     # fix empty difficulties
     songdirs = [i for i in songdirs if list(Path(i).glob("*.osu"))]
-    paths = [os.path.join(cur, i) for i in songdirs]
+    paths = [p.joinpath(i) for i in songdirs]
     audios = []
     osufiles = []
     for i in paths:
@@ -47,4 +46,3 @@ with open("playlist.m3u8", "w", encoding="utf8") as playlist:
         song_path = str(namedict[sn].resolve()) + "\n"
         playlist.write(song_path)
 print("Playlist created,available songs:", len(names))
-# os.system("mpv --playlist=playlist.m3u8 --shuffle --volume 35")
