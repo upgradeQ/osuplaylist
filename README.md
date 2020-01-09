@@ -7,6 +7,10 @@ _or_
 
  run `python3 osu_playlist.py --collection "name of collection"` to export collection. Name might be case insensitive or with mistakes.
 
+_or_
+
+run `python3 osu_playlist.py --tag tagname` to export all songs with one `tagname`. Name might be case insensitive.
+
 Depending on choice playlist.m3u8 will be created; .m3u8 format can be used in various music players.
 
 Example  with [mpv](https://mpv.io/):
