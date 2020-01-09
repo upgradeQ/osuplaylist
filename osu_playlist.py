@@ -6,6 +6,7 @@ import struct
 import difflib
 from collections.abc import MutableMapping
 from collections import OrderedDict
+from itertools import groupby
 
 p = Path(".")
 collection_db = p.absolute().parent / "collection.db"
@@ -16,6 +17,7 @@ parser = argparse.ArgumentParser(description=text)
 parser.add_argument(
     "--collection", dest="collection_name", help="export collection as playlist.m3u8"
 )
+parser.add_argument("--tag", dest="tag", help="export all songs with one tag as playlist.m3u8")
 args = parser.parse_args()
 
 
@@ -185,6 +187,37 @@ def collection_content(collection_name):
     return result
 
 
+def filter_tags(tag=None):
+    tag = tag.lower()
+
+    def group_tags(sn_with_tags, tag):
+        groups = dict()
+        f = lambda x: tag in x[1]
+
+        for sn, t in groupby(sn_with_tags, key=f):
+            _group = list(t)
+            if sn in groups:
+                groups[sn] += _group
+            else:
+                groups[sn] = _group
+
+        return groups
+
+    sn_tags = list()
+    for song_name, dot_osu in osudict.items():
+        with open(dot_osu[0], "r", encoding="utf8") as f:
+            for line in f.readlines():
+                if line.startswith("Tags"):
+                    tags = line.partition(":")[2].strip().split(" ")
+                    sn_tags.append([song_name, [t.lower() for t in tags]])
+                    break
+    _tags = group_tags(sn_tags, tag)
+    true_tags = _tags[True]
+    sn_list = [r[0] for r in true_tags]
+    return sn_list
+
+
+
 def create_playlist(list_of_song_names):
     with open("playlist.m3u8", "w", encoding="utf8") as playlist:
         playlist.write("#EXTM3U" + "\n")
@@ -198,8 +231,12 @@ def create_playlist(list_of_song_names):
 
 if __name__ == "__main__":
     col_name = args.collection_name
-    if not col_name:
-        create_playlist(names)
-    else:
+    tag= args.tag
+    if col_name:
         col_list = collection_content(col_name)
         create_playlist(col_list)
+    elif tag: 
+        tag_list = filter_tags(tag)
+        create_playlist(tag_list)
+    else:
+        create_playlist(names)
