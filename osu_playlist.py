@@ -1,9 +1,11 @@
 ##### PUT THIS FILE IN OSU/SONGS FOLDER #####
-from pathlib import Path
 import argparse
-import hashlib
-import struct
 import difflib
+import struct
+import re
+import hashlib
+from shutil import copy
+from pathlib import Path
 from collections.abc import MutableMapping
 from collections import OrderedDict
 from itertools import groupby
@@ -15,9 +17,22 @@ text = "https://mpv.io/manual/stable/#keyboard-control"
 parser = argparse.ArgumentParser(description=text)
 # https://stackoverflow.com/questions/18157376/handle-spaces-in-argparse-input
 parser.add_argument(
-    "--collection", dest="collection_name", help="export collection as playlist.m3u8"
+    "--collection",
+    "-c",
+    action="store",
+    dest="collection_name",
+    help="export collection as playlist.m3u8",
 )
-parser.add_argument("--tag", dest="tag", help="export all songs with one tag as playlist.m3u8")
+parser.add_argument(
+    "--reg_tag",
+    "-r",
+    action="store",
+    dest="reg_tag",
+    help="export all songs with regular expression applied to tag string lowercase",
+)
+parser.add_argument(
+    "--to_dir", "-d", action="store", dest="to_dir", help="provide output path"
+)
 args = parser.parse_args()
 
 
@@ -187,13 +202,14 @@ def collection_content(collection_name):
     return result
 
 
-def filter_tags(tag=None):
-    tag = tag.lower()
+def filter_tags(regtag=None):
+    """apply regex to tag line"""
+    regtag = regtag.lower()
+    regex = re.compile(regtag)
 
-    def group_tags(sn_with_tags, tag):
+    def group_tags(sn_with_tags, regtag):
         groups = dict()
-        f = lambda x: tag in x[1]
-
+        f = lambda x: bool(regex.search(x[1]))
         for sn, t in groupby(sn_with_tags, key=f):
             _group = list(t)
             if sn in groups:
@@ -208,14 +224,14 @@ def filter_tags(tag=None):
         with open(dot_osu[0], "r", encoding="utf8") as f:
             for line in f.readlines():
                 if line.startswith("Tags"):
-                    tags = line.partition(":")[2].strip().split(" ")
-                    sn_tags.append([song_name, [t.lower() for t in tags]])
+                    tag_line = line.partition(":")[2].strip()
+                    sn_tags.append([song_name, tag_line.lower()])
                     break
-    _tags = group_tags(sn_tags, tag)
+    _tags = group_tags(sn_tags, regtag)
     true_tags = _tags[True]
     sn_list = [r[0] for r in true_tags]
-    return sn_list
 
+    return sn_list
 
 
 def create_playlist(list_of_song_names):
@@ -229,14 +245,35 @@ def create_playlist(list_of_song_names):
     print("Playlist created,available songs:", len(list_of_song_names))
 
 
+def export_to_dir(list_of_song_names, to_dir=None):
+    to_dir = Path(str(to_dir))
+    if not to_dir.exists():
+        to_dir.mkdir()
+    for sn in list_of_song_names:
+        from_dir = str(namedict[sn])
+        end_dir = str(to_dir / sn) + str(namedict[sn].suffix)
+        copy(from_dir, end_dir)
+    print("Songs export complete,quantity: ", len(list_of_song_names))
+
+
 if __name__ == "__main__":
     col_name = args.collection_name
-    tag= args.tag
+    regtag = args.reg_tag
+    to_dir = args.to_dir
     if col_name:
         col_list = collection_content(col_name)
-        create_playlist(col_list)
-    elif tag: 
-        tag_list = filter_tags(tag)
-        create_playlist(tag_list)
+        if to_dir:
+            export_to_dir(col_list, to_dir)
+        else:
+            create_playlist(col_list)
+    elif regtag:
+        tag_list = filter_tags(regtag)
+        if to_dir:
+            export_to_dir(tag_list, to_dir)
+        else:
+            create_playlist(tag_list)
     else:
-        create_playlist(names)
+        if to_dir:
+            export_to_dir(names, to_dir)
+        else:
+            create_playlist(names)
