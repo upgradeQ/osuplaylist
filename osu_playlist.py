@@ -33,6 +33,10 @@ parser.add_argument(
 parser.add_argument(
     "--to_dir", "-d", action="store", dest="to_dir", help="provide output path"
 )
+
+parser.add_argument(
+    "--inverse", "-i", action="store_true", dest="inverse", help="inverse regex search"
+)
 args = parser.parse_args()
 
 
@@ -150,8 +154,8 @@ def get_collections():
 
 
 def get_songs():
+    # Note , this and get_collections are taken from https://github.com/eshrh/osu-cplayer
     songdirs = [str(i) for i in p.iterdir() if str(i).split()[0].isdigit()]
-    # fix empty difficulties
     songdirs = [i for i in songdirs if list(Path(i).glob("*.osu"))]
     paths = [p.joinpath(i) for i in songdirs]
     audios = []
@@ -179,11 +183,6 @@ def get_songs():
     return (sorted(list(set(names))), namedict, osudict)
 
 
-names, namedict, osudict = get_songs()
-md5s = generate_hashes(osudict)
-collections = get_collections()
-
-
 def collection_content(collection_name):
     name = difflib.get_close_matches(
         collection_name.lower(), [c.lower() for c in collections.keys()]
@@ -202,9 +201,9 @@ def collection_content(collection_name):
     return result
 
 
-def filter_tags(regtag=None):
-    """apply regex to tag line"""
-    regtag = regtag.lower()
+def filter_tags(osudict, regtag=None, inverse=False, list_of_song_names=None):
+    """apply regex to tag line of all songs or to a list_of_song_names"""
+    regtag = regtag.lower()  # ignore case
     regex = re.compile(regtag)
 
     def group_tags(sn_with_tags, regtag):
@@ -219,6 +218,9 @@ def filter_tags(regtag=None):
 
         return groups
 
+    if list_of_song_names:
+        # update osudict
+        osudict = {sn: osudict[sn] for sn in list_of_song_names}
     sn_tags = list()
     for song_name, dot_osu in osudict.items():
         with open(dot_osu[0], "r", encoding="utf8") as f:
@@ -228,10 +230,12 @@ def filter_tags(regtag=None):
                     sn_tags.append([song_name, tag_line.lower()])
                     break
     _tags = group_tags(sn_tags, regtag)
-    true_tags = _tags[True]
-    sn_list = [r[0] for r in true_tags]
-
-    return sn_list
+    try:
+        sn_list = [r[0] for r in _tags[bool(not inverse)]]
+        return sn_list
+    except KeyError:
+        print("Not found")
+        return []
 
 
 def create_playlist(list_of_song_names):
@@ -245,7 +249,7 @@ def create_playlist(list_of_song_names):
     print("Playlist created,available songs:", len(list_of_song_names))
 
 
-def export_to_dir(list_of_song_names, to_dir=None):
+def export_to_dir(list_of_song_names, to_dir='osu_playlist_output'):
     to_dir = Path(str(to_dir))
     if not to_dir.exists():
         to_dir.mkdir()
@@ -256,18 +260,24 @@ def export_to_dir(list_of_song_names, to_dir=None):
     print("Songs export complete,quantity: ", len(list_of_song_names))
 
 
+names, namedict, osudict = get_songs()
+
 if __name__ == "__main__":
+
     col_name = args.collection_name
     regtag = args.reg_tag
     to_dir = args.to_dir
+    inverse = args.inverse
     if col_name:
+        md5s = generate_hashes(osudict)
+        collections = get_collections()
         col_list = collection_content(col_name)
         if to_dir:
             export_to_dir(col_list, to_dir)
         else:
             create_playlist(col_list)
     elif regtag:
-        tag_list = filter_tags(regtag)
+        tag_list = filter_tags(osudict, regtag, inverse)
         if to_dir:
             export_to_dir(tag_list, to_dir)
         else:
