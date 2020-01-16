@@ -4,19 +4,30 @@ Extract all osu songs, collection,run a regex search in .osu tag line.Export aud
 # Usage 
 Put this file in your osu!/Songs folder
 ## Commands
-* `python3 osu_playlist.py` to export all songs as .m3u8 playlist
- 
-* `python3 osu_playlist.py --collection "name of collection"` to export collection. Name might be case insensitive or with mistakes.
-
-* `python3 osu_playlist.py --regtag "regex"` run a regex search on tags provided from .osu file e.g: this "(azer|drumstep)" will match all songs which contain azer or drumstep, lowercase.
-* `python3 osu_playlist.py -r "regex" -i ` run an inversed regex search on tags
-* `python3 osu_playlist.py --to_dir "path"` provide path to export audio(optional)
-* more on commands `python3 osu_playlist.py --help` 
+### export all songs as .m3u8 playlist, may take a while
+  `python3 osu_playlist.py`
+### export collection. Name might be case insensitive or with typos 
+ `python3 osu_playlist.py --collection "name of collection"` 
+### run a regex search on tags provided from .osu file 
+`python3 osu_playlist.py --regtag "regex"`
+### run an inversed regex search on tags (optional)
+  `python3 osu_playlist.py -r "regex" -i ` 
+###  provide path to export audio.(optional) if used without arg - all songs
+  `python3 osu_playlist.py --to_dir "path"`
+### info
+ `python3 osu_playlist.py --help` 
 
 ## Example  with [mpv](https://mpv.io/):
   `mpv --playlist=playlist.m3u8 --shuffle --volume 35` 
-  
- 
+## Example regex search + inverse + to directory:
+ `python3 osu_playlist.py -r "(azer|step)" -i -d "E:/music/osu_playlist"`
+
+`-r "(azer|step)"` will match all songs which contain azer or step
+
+`-i` (optional) return an inverted result , all songs which NOT contain azer or step
+
+`-d` (optional) export .mp3 to directory E:/music/osu_playlist
+
 # Using osu_playlist.py as a library
 ```python
 import osu_playlist

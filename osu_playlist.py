@@ -156,6 +156,7 @@ def get_collections():
 def get_songs():
     # Note , this and get_collections are taken from https://github.com/eshrh/osu-cplayer
     songdirs = [str(i) for i in p.iterdir() if str(i).split()[0].isdigit()]
+    # check if there is osu file in directory, this might happen if you deleted all song difs 
     songdirs = [i for i in songdirs if list(Path(i).glob("*.osu"))]
     paths = [p.joinpath(i) for i in songdirs]
     audios = []
