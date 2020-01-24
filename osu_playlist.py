@@ -4,9 +4,11 @@ import difflib
 import struct
 import re
 import hashlib
-from shutil import copy
+import time
+from datetime import datetime
+from shutil import copy, move
 from pathlib import Path
-from collections.abc import MutableMapping
+from collections.abc import MutableMapping, Mapping
 from collections import OrderedDict
 from itertools import groupby
 
@@ -31,9 +33,23 @@ parser.add_argument(
     help="export all songs with regular expression applied to tag string lowercase",
 )
 parser.add_argument(
+    "--date_range",
+    "-t",
+    action="store",
+    dest="date_range",
+    help="apply daterange, daterange format:Year.month.day example: >2020.1.1 larger than, 2020.1.1:2020.1.24 in this range",
+)
+parser.add_argument(
     "--to_dir", "-d", action="store", dest="to_dir", help="provide output path"
 )
 
+parser.add_argument(
+    "--update_db",
+    "-g",
+    action="store",
+    dest="db_col_name",
+    help="provide collection name",
+)
 parser.add_argument(
     "--inverse", "-i", action="store_true", dest="inverse", help="inverse regex search"
 )
@@ -141,7 +157,7 @@ def nextstr(f):
 def get_collections():
     col = {}
     f = open(collection_db, "rb")
-    nextint(f)
+    version = nextint(f)
     ncol = nextint(f)
     for i in range(ncol):
         colname = nextstr(f)
@@ -150,13 +166,79 @@ def get_collections():
             f.read(2)
             col[colname].append(f.read(32).decode("utf-8"))
     f.close()
-    return col
+    return (col, version)
 
 
+# db write  https://github.com/LoPij/osu-collection-manager/blob/84c1d7dd0136183fad8b46b5e8bf703e81b50c15/osuCollectionManager.py#L148
+def write_int(file, integer):
+    int_b = integer.to_bytes(4, "little")
+    file.write(int_b)
+
+
+def get_uleb128(integer):
+    result = 0
+    shift = 0
+    while True:
+        byte = integer
+
+        result |= (byte & 0x7F) << shift
+        # Detect last byte:
+        if byte & 0x80 == 0:
+            break
+        shift += 7
+    return result.to_bytes(1, "little")
+
+
+def write_string(file, string):
+    if not string:
+        # If the string is empty, the string consists of just this byte
+        return bytes([0x00])
+    else:
+        # Else, it starts with 0x0b
+        result = bytes([0x0B])
+
+        # Followed by the length of the string as an ULEB128
+        result += get_uleb128(len(string))
+
+        # Followed by the string in UTF-8
+        result += string.encode("utf-8")
+        file.write(result)
+
+
+def updated_collection(list_of_song_names, name):
+    backup_db = collection_db.parents[0] / "OPLbackup_collection.db"
+    # read version ,count
+    collection_dict, version = get_collections()
+    # copy as backup.db , osu client on launch will create .bak also
+    if not backup_db.exists():
+        copy(collection_db, backup_db)
+    md5s = generate_hashes(osudict)
+    hashes = []
+    for h in list_of_song_names:
+        for difficultly_hash in md5s[h]:
+            hashes.append(difficultly_hash)
+    timestamp = str(int(time.time()))
+    name = name + " " + timestamp
+    collection_dict[name] = hashes
+    with open(collection_db, "wb") as f:
+        # write version int , count int
+        write_int(f, version)
+        write_int(f, len(collection_dict))
+        # for each collection including generated
+        for col_name, col_hashes in collection_dict.items():
+            # write its name string,maps count len(),write hashes md5s
+            write_string(f, col_name)
+            write_int(f, len(col_hashes))
+            for h in col_hashes:
+                write_string(f, h)
+    print("Export to db complete,quantity: ", len(list_of_song_names))
+
+
+# ---------------------------------------------------------------------------------------
 def get_songs():
     # Note , this and get_collections are taken from https://github.com/eshrh/osu-cplayer
     songdirs = [str(i) for i in p.iterdir() if str(i).split()[0].isdigit()]
-    # check if there is osu file in directory, this might happen if you deleted all song difs 
+    # check if there is osu file in directory, this might happen if you deleted all song difs
     songdirs = [i for i in songdirs if list(Path(i).glob("*.osu"))]
     paths = [p.joinpath(i) for i in songdirs]
     audios = []
@@ -207,7 +289,7 @@ def filter_tags(osudict, regtag=None, inverse=False, list_of_song_names=None):
     regtag = regtag.lower()  # ignore case
     regex = re.compile(regtag)
 
-    def group_tags(sn_with_tags, regtag):
+    def group_tags(sn_with_tags):
         groups = dict()
         f = lambda x: bool(regex.search(x[1]))
         for sn, t in groupby(sn_with_tags, key=f):
@@ -230,7 +312,7 @@ def filter_tags(osudict, regtag=None, inverse=False, list_of_song_names=None):
                     tag_line = line.partition(":")[2].strip()
                     sn_tags.append([song_name, tag_line.lower()])
                     break
-    _tags = group_tags(sn_tags, regtag)
+    _tags = group_tags(sn_tags)
     try:
         sn_list = [r[0] for r in _tags[bool(not inverse)]]
         return sn_list
@@ -250,7 +332,7 @@ def create_playlist(list_of_song_names):
     print("Playlist created,available songs:", len(list_of_song_names))
 
 
-def export_to_dir(list_of_song_names, to_dir='osu_playlist_output'):
+def export_to_dir(list_of_song_names, to_dir="osu_playlist_output"):
     to_dir = Path(str(to_dir))
     if not to_dir.exists():
         to_dir.mkdir()
@@ -261,6 +343,45 @@ def export_to_dir(list_of_song_names, to_dir='osu_playlist_output'):
     print("Songs export complete,quantity: ", len(list_of_song_names))
 
 
+def apply_daterange(list_of_song_names, daterange=None):
+    def get_date(datestring):
+        format = "%Y.%m.%d"
+        date = datetime.strptime(datestring, format)
+        return date
+
+    sn_date = dict()
+    for sn in list_of_song_names:
+        # creation date of file https://stackoverflow.com/a/52858040
+        sn_date[sn] = datetime.fromtimestamp(namedict[sn].stat().st_ctime)
+
+    def parse(daterange):
+        list_of_song_names = list()
+        if ">" in daterange:
+            datestring = daterange.replace(">", "")
+            date = get_date(datestring)
+            for sn, dt in sn_date.items():
+                if dt > date:
+                    list_of_song_names.append(sn)
+            return list_of_song_names
+        if "<" in daterange:
+            datestring = daterange.replace("<", "")
+            date = get_date(datestring)
+            for sn, dt in sn_date.items():
+                if dt < date:
+                    list_of_song_names.append(sn)
+            return list_of_song_names
+        if ":" in daterange:
+            date_start, date_end = daterange.split(":")
+            date_start, date_end = get_date(date_start), get_date(date_end)
+            for sn, dt in sn_date.items():
+                if date_start <= dt <= date_end:
+                    list_of_song_names.append(sn)
+            return list_of_song_names
+
+    sn_list = parse(daterange)
+    return sn_list
+
+
 names, namedict, osudict = get_songs()
 
 if __name__ == "__main__":
@@ -269,9 +390,11 @@ if __name__ == "__main__":
     regtag = args.reg_tag
     to_dir = args.to_dir
     inverse = args.inverse
+    to_game = args.db_col_name
+    daterange = args.date_range
     if col_name:
         md5s = generate_hashes(osudict)
-        collections = get_collections()
+        collections, _version = get_collections()
         col_list = collection_content(col_name)
         if to_dir:
             export_to_dir(col_list, to_dir)
@@ -279,11 +402,17 @@ if __name__ == "__main__":
             create_playlist(col_list)
     elif regtag:
         tag_list = filter_tags(osudict, regtag, inverse)
+        if daterange:
+            tag_list = apply_daterange(tag_list, daterange)
         if to_dir:
             export_to_dir(tag_list, to_dir)
+        elif to_game:
+            updated_collection(tag_list, name=to_game)
         else:
             create_playlist(tag_list)
     else:
+        if daterange:
+            names = apply_daterange(names, daterange)
         if to_dir:
             export_to_dir(names, to_dir)
         else:
