@@ -5,8 +5,10 @@ import struct
 import re
 import hashlib
 import time
+from string import Template
+from uuid import uuid1
 from datetime import datetime
-from shutil import copy, move
+from shutil import copy
 from pathlib import Path
 from collections.abc import MutableMapping, Mapping
 from collections import OrderedDict
@@ -24,6 +26,16 @@ parser.add_argument(
     action="store",
     dest="collection_name",
     help="export collection as playlist.m3u8",
+)
+parser.add_argument(
+    "--import_mp3",
+    "-m",
+    action="store",
+    dest="path_to_mp3s",
+    help="provide path where mp3s are,search them in-game mp3 osu will index it",
+)
+parser.add_argument(
+    "--nameit", "-n", action="store", dest="name_it", help="provide name ascii"
 )
 parser.add_argument(
     "--reg_tag",
@@ -54,6 +66,67 @@ parser.add_argument(
     "--inverse", "-i", action="store_true", dest="inverse", help="inverse regex search"
 )
 args = parser.parse_args()
+osu_file_format = Template(
+    """\
+osu file format v14
+
+[General]
+AudioFilename: $an
+AudioLeadIn: 0
+PreviewTime: -1
+Countdown: 0
+SampleSet: Soft
+StackLeniency: 0.7
+Mode: 0
+LetterboxInBreaks: 0
+WidescreenStoryboard: 0
+
+[Editor]
+DistanceSpacing: 1.4
+BeatDivisor: 4
+GridSize: 4
+TimelineZoom: 1
+
+[Metadata]
+Title:$title
+TitleUnicode:$title
+Artist:OP
+ArtistUnicode:OP
+Creator:osu_playlist
+Version:zero
+Source:
+Tags:$bn
+BeatmapID:0
+BeatmapSetID:-1
+
+[Difficulty]
+HPDrainRate:7
+CircleSize:5
+OverallDifficulty:7
+ApproachRate:9
+SliderMultiplier:1.4
+SliderTickRate:1
+
+[Events]
+//Background and Video events
+0,0,"bg.png",0,0
+//Break Periods
+//Storyboard Layer 0 (Background)
+//Storyboard Layer 1 (Fail)
+//Storyboard Layer 2 (Pass)
+//Storyboard Layer 3 (Foreground)
+//Storyboard Layer 4 (Overlay)
+//Storyboard Sound Samples
+
+[TimingPoints]
+4852.88555273078,315.789473684211,4,2,0,40,1,0
+25852,300,4,2,0,40,1,0
+42502,315.789473684211,4,2,0,40,1,0
+
+
+[HitObjects]
+256,192,905,12,0,1234,0:0:0:0:"""
+)
 
 
 class CaseInsensitiveDict(MutableMapping):
@@ -205,7 +278,7 @@ def write_string(file, string):
         file.write(result)
 
 
-def updated_collection(list_of_song_names, name):
+def update_collection(list_of_song_names, name, osudict=None):
     backup_db = collection_db.parents[0] / "OPLbackup_collection.db"
     # read version ,count
     collection_dict, version = get_collections()
@@ -234,7 +307,44 @@ def updated_collection(list_of_song_names, name):
     print("Export to db complete,quantity: ", len(list_of_song_names))
 
 
-# ---------------------------------------------------------------------------------------
+def import_songs_as_collection(path_with_mp3s, collection_name):
+    # hit F5 in song menu in oss
+
+    mp3s = [mp3_path for mp3_path in Path(path_with_mp3s).glob("*.mp3")]
+
+    def create_fake_osu_beatmaps(mp3s):
+        list_of_song_names = list()
+        osudict = dict()
+        for mp3 in mp3s:
+            # uuid for unic hash when using update_collection and for unic name in osu/songs
+            bn = str(uuid1())
+            # create directory
+            bp = Path(f"beatmap-{bn}")
+            bp.mkdir()
+            # move  audio to beatmap path
+            copy(str(mp3), str(bp))
+            # move bg
+            copy("bg.png", str(bp))
+            # create simple .osu
+            title = mp3.name
+            # doesnt works with unicode , so then check is it asii or not https://stackoverflow.com/a/18403812
+            isascii = lambda s: len(s) == len(s.encode())
+            if not isascii(title):
+                title = bn
+            fake_dot_osu = f"OP - {title} (osu_playlist) [zero].osu"
+            bp_osu = bp / fake_dot_osu
+
+            with bp_osu.open("w", encoding="utf-8") as f:
+                f.write(osu_file_format.substitute(an=mp3.name, title=title, bn=bn))
+
+            list_of_song_names.append(title)
+            osudict[title] = [bp_osu]
+        return list_of_song_names, osudict
+
+    list_of_song_names, osudict = create_fake_osu_beatmaps(mp3s)
+    update_collection(list_of_song_names, collection_name, osudict=osudict)
+
+
 def get_songs():
     # Note , this and get_collections are taken from https://github.com/eshrh/osu-cplayer
     songdirs = [str(i) for i in p.iterdir() if str(i).split()[0].isdigit()]
@@ -284,7 +394,7 @@ def collection_content(collection_name):
     return result
 
 
-def filter_tags(osudict, regtag=None, inverse=False, list_of_song_names=None):
+def filter_tags(osudict=None, regtag=None, inverse=False, list_of_song_names=None):
     """apply regex to tag line of all songs or to a list_of_song_names"""
     regtag = regtag.lower()  # ignore case
     regex = re.compile(regtag)
@@ -392,6 +502,8 @@ if __name__ == "__main__":
     inverse = args.inverse
     to_game = args.db_col_name
     daterange = args.date_range
+    name = args.name_it
+    path_to_mp3s = args.path_to_mp3s
     if col_name:
         md5s = generate_hashes(osudict)
         collections, _version = get_collections()
@@ -400,6 +512,8 @@ if __name__ == "__main__":
             export_to_dir(col_list, to_dir)
         else:
             create_playlist(col_list)
+    elif path_to_mp3s:
+        import_songs_as_collection(path_to_mp3s, name)
     elif regtag:
         tag_list = filter_tags(osudict, regtag, inverse)
         if daterange:
@@ -407,7 +521,7 @@ if __name__ == "__main__":
         if to_dir:
             export_to_dir(tag_list, to_dir)
         elif to_game:
-            updated_collection(tag_list, name=to_game)
+            update_collection(tag_list, name=to_game)
         else:
             create_playlist(tag_list)
     else:
