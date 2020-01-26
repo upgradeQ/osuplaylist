@@ -22,7 +22,7 @@
 ### указать путь для экспорта аудио (необязательно)
  `python3 osu_playlist.py --to_dir "path"` 
 ### Импорт мп3
-   `python osu_playlist.py -m "E:\music" -n "in_game_collection_name"`, имя _только на ascii_
+   `python osu_playlist.py -m "E:\music" -n "in_game_collection_name"`, имя _только на ascii_, также нужно найти эти треки в игре , поиск:.mp3, кликнуть на них.Без этих действий коллекции с этими треками не будут работать.
 ### команды 
  `python3 osu_playlist.py --help` 
 
