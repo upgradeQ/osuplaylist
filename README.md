@@ -23,7 +23,7 @@ Put this file in your osu!/Songs folder
 ###  provide path to export audio.(optional) if used without arg - all songs
   `python3 osu_playlist.py --to_dir "path"`
 ### import mp3s 
-   `python osu_playlist.py -m "E:\music" -n "in_game_collection_name"`, name _ascii only_
+   `python osu_playlist.py -m "E:\music" -n "in_game_collection_name"`, name _ascii only_, and you need manually click all mp3s, search mp3 in osu,and click, it(collections) will not work otherwise 
 ### info
  `python3 osu_playlist.py --help` 
 
