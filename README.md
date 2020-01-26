@@ -1,5 +1,9 @@
 # osu-playlist
-Extract all osu songs, collection,run a regex search in .osu tag line , apply daterange .Export audio to directory/to ingame collection or create m3u8 playlist.
+Extract all osu songs, collection,run a regex search in .osu tag line , apply daterange .
+
+Export audio to directory/to ingame collection or create m3u8 playlist.
+
+Import your songs in .mp3 format to osu
 # Russian 🇷🇺 [README](ReadmeRU.md)
 # Usage 
 Put this file in your osu!/Songs folder
@@ -18,6 +22,8 @@ Put this file in your osu!/Songs folder
   `python3 osu_playlist.py -r "regex" -i ` 
 ###  provide path to export audio.(optional) if used without arg - all songs
   `python3 osu_playlist.py --to_dir "path"`
+### import mp3s 
+   `python osu_playlist.py -m "E:\music" -n "in_game_collection_name"`, name _ascii only_
 ### info
  `python3 osu_playlist.py --help` 
 
