@@ -521,7 +521,7 @@ if __name__ == "__main__":
         if to_dir:
             export_to_dir(tag_list, to_dir)
         elif to_game:
-            update_collection(tag_list, name=to_game)
+            update_collection(tag_list, name=to_game, osudict=osudict)
         else:
             create_playlist(tag_list)
     else:
