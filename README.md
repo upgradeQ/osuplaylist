@@ -4,6 +4,8 @@ Extract all osu songs, collection,run a regex search in .osu tag line , apply da
 Export audio to directory/to ingame collection or create m3u8 playlist.
 
 Import your songs in .mp3 format to osu
+
+[![hqupgradehq/osu-playlist - GitHub](https://gh-card.dev/repos/hqupgradehq/osu-playlist.svg)](https://github.com/hqupgradehq/osu-playlist)
 # Russian 🇷🇺 [README](ReadmeRU.md)
 # Usage 
 Put this file in your osu!/Songs folder
