@@ -1,14 +1,26 @@
 # osu-playlist
-Extract all osu songs, collection,run a regex search in .osu tag line , apply daterange .
+Extract all osu songs, collection,run a regex search in .osu tag line , apply daterange .    
+Export audio to directory/to ingame collection or create m3u8 playlist.     
+Import your songs in .mp3 format to osu  
+Create loops for each song in collection/regex results
+# [Перевод](ReadmeRU.md)
+| Navigation |
+| ---|
+| [Installation](#installation)| 
+| [Limitations](#limitations)| 
+| [Commands](#commands)| 
+| [Examples ](#examples) |
+| [Using osu_playlist.py as a library](#using-osu_playlistpy-as-a-library)| 
+| [Contribute](#contribute)| 
 
-Export audio to directory/to ingame collection or create m3u8 playlist.
-
-Import your songs in .mp3 format to osu
-
-[![hqupgradehq/osu-playlist - GitHub](https://gh-card.dev/repos/hqupgradehq/osu-playlist.svg)](https://github.com/hqupgradehq/osu-playlist)
-# Russian 🇷🇺 [README](ReadmeRU.md)
-# Usage 
-Put this file in your osu!/Songs folder
+# Installation 
+Python version >= 3.6  
+Download latest release [here](https://github.com/HQupgradeHQ/osu-playlist/releases)  
+Put osu_playlist.py in your osu!/Songs folder
+# Limitations
+- creation of ingame collection requires to restart client
+- importing your mp3 requires restart & refresh `F5` & ascii name
+- daterange will not work properly  on linux
 ## Commands
 ### export all songs as .m3u8 playlist, may take a while
   `python3 osu_playlist.py`
@@ -16,7 +28,7 @@ Put this file in your osu!/Songs folder
   `python3 osu_playlist.py --date_range "daterange"`,daterange format:Year.month.day example: >2020.1.1 older than, 2020.1.1:2020.1.24 in this range 
 ### export collection. Name might be case insensitive or with typos 
  `python3 osu_playlist.py --collection "name of collection"`
- ### export to ingame collection. Name will be with current timestamp. (optional)
+### export to ingame collection. Name will be with current timestamp. (optional)
  `python3 osu_playlist.py --update_db "name of collection"` 
 ### run a regex search on tags provided from .osu file 
 `python3 osu_playlist.py --regtag "regex"`
@@ -25,13 +37,16 @@ Put this file in your osu!/Songs folder
 ###  provide path to export audio.(optional) if used without arg - all songs
   `python3 osu_playlist.py --to_dir "path"`
 ### import mp3s 
-   `python osu_playlist.py -m "E:\music" -n "in_game_collection_name"`, name _ascii only_, and you need manually click all mp3s, search mp3 in osu,and click, it(collections) will not work otherwise 
+   `python3 osu_playlist.py -m "E:Installation\music" -n "in_game_collection_name"`, name _ascii only_  and you need manually click all mp3s, search mp3 in osu,and click, it(collections) will not work
+### create loops , ONLY regtag and collections
+   `python3 osu_playlist.py --collection "name of collection" --loopify`
 ### info
  `python3 osu_playlist.py --help` 
 
-## Example  with [mpv](https://mpv.io/):
+## Examples 
+### Example  with [mpv](https://mpv.io/):
   `mpv --playlist=playlist.m3u8 --shuffle --volume 35` 
-## Example regex search + inverse + to directory:
+### Example regex search + inverse + to directory:
  `python3 osu_playlist.py -r "(azer|step)" -i -d "E:/music/osu_playlist"`
 
 `-r "(azer|step)"` will match all songs which contain azer or step

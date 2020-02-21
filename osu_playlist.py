@@ -65,6 +65,9 @@ parser.add_argument(
 parser.add_argument(
     "--inverse", "-i", action="store_true", dest="inverse", help="inverse regex search"
 )
+parser.add_argument(
+    "--loopify", "-l", action="store_true", dest="loops", help="create loops "
+)
 args = parser.parse_args()
 osu_file_format = Template(
     """\
@@ -492,6 +495,11 @@ def apply_daterange(list_of_song_names, daterange=None):
     return sn_list
 
 
+def create_loops(list_of_song_names, osudict):
+    for song in list_of_song_names:
+        update_collection([song], song + " LOOP", osudict=osudict)
+
+
 names, namedict, osudict = get_songs()
 
 if __name__ == "__main__":
@@ -504,12 +512,15 @@ if __name__ == "__main__":
     daterange = args.date_range
     name = args.name_it
     path_to_mp3s = args.path_to_mp3s
+    loops = args.loops
     if col_name:
         md5s = generate_hashes(osudict)
         collections, _version = get_collections()
         col_list = collection_content(col_name)
         if to_dir:
             export_to_dir(col_list, to_dir)
+        elif loops:
+            create_loops(col_list,osudict)
         else:
             create_playlist(col_list)
     elif path_to_mp3s:
@@ -518,8 +529,10 @@ if __name__ == "__main__":
         tag_list = filter_tags(osudict, regtag, inverse)
         if daterange:
             tag_list = apply_daterange(tag_list, daterange)
-        if to_dir:
+        elif to_dir:
             export_to_dir(tag_list, to_dir)
+        elif loops:
+            create_loops(tag_list,osudict)
         elif to_game:
             update_collection(tag_list, name=to_game, osudict=osudict)
         else:
