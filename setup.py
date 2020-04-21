@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="osuplaylist",
-    version="0.2.0",
+    version="0.2.1",
     author="upgradehq",
     author_email="noreply@example.com",
     description="Export audio to directory/to ingame collection or create m3u8 playlist",

@@ -24,7 +24,7 @@ if not cfg_path.exists():
     config["osu_songs"]["path"] = full_path
     with open(cfg_path, "w") as cfg:
         config.write(cfg)
-config.read(ini)
+config.read(cfg_path)
 
 p = Path(config["osu_songs"]["path"])
 # /songs path
