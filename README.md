@@ -1,12 +1,12 @@
 # osuplaylist
 Extract all osu songs, collection,run a regex search in .osu tag line , apply daterange .    
-Export audio to directory/to ingame collection or create m3u8 playlist.     
+Export audio to directory/to ingame collection/to steam queue or create m3u8 playlist.     
 Import your songs in .mp3 format to osu  
-Create loops for each song in collection/regex results
+![screenshot_export_to_steam_from_osu](export.jpg)
 # Installation 
 Python version >= 3.6  
-Download latest release [here](https://github.com/HQupgradeHQ/osu-playlist/releases)  
-`pip install osuplaylist`
+`pip install osuplaylist`  
+update `pip install osuplaylist -U`
 # Limitations
 - creation of ingame collection requires to restart client
 - importing your mp3 requires restart & refresh `F5` & ascii name
@@ -26,10 +26,10 @@ Download latest release [here](https://github.com/HQupgradeHQ/osu-playlist/relea
   `osuplaylist -r "regex" -i ` 
 ###  provide path to export audio.(optional) if used without arg - all songs
   `osuplaylist --to_dir "path"`
+### export to steam queue.m3u8 
+ `osuplaylist -r "step" -s` close steam first, this will overwrite queue.m3u8 from _database of steam, you will be asked just one time to provide full path 
 ### import mp3s 
-   `osuplaylist -m "E:Installation\music" -n "in_game_collection_name"`, name _ascii only_  and you need manually click all mp3s, search mp3 in osu,and click, it(collections) will not work
-### create loops , ONLY regtag and collections
-   `osuplaylist --collection "name of collection" --loopify`
+   `osuplaylist -m "E:Installation\music" -n "in_game_collection_name"`, name _ascii only_  and you need manually click all mp3s, search mp3 in osu,and click,otherwise collections will not work
 ### info
  `osuplaylist --help` 
 
@@ -38,13 +38,13 @@ Download latest release [here](https://github.com/HQupgradeHQ/osu-playlist/relea
   `mpv --playlist=playlist.m3u8 --shuffle --volume 35` 
 ### Example regex search + inverse + to directory:
  `osuplaylist -r "(azer|step)" -i -d "E:/music/osuplaylist"`
-
 `-r "(azer|step)"` will match all songs which contain azer or step
 
 `-i` (optional) return an inverted result , all songs which NOT contain azer or step
 
 `-d` (optional) export .mp3 to directory E:/music/osuplaylist
-
+### Example combine regex + daterange + to steam
+`osuplaylist -r "stea" -t ">2020.1.1" -s`
 # Using osuplaylist.py as a library
 ```python
 import osuplaylist
