@@ -1,10 +1,10 @@
 import argparse
 import configparser
-import difflib
-import struct
 import re
 import hashlib
-import time
+from struct import unpack
+from difflib import get_close_matches
+from time import time
 from string import Template
 from uuid import uuid1
 from datetime import datetime
@@ -18,9 +18,10 @@ cli_path = Path(__file__).absolute()
 ini = "osu_playlist_config.ini"
 cfg_path = cli_path.parent / ini
 config = configparser.ConfigParser()
+# bug , it somehow creates a new cfg path  if one is not present in current directory
 if not cfg_path.exists():
     config["osu_songs"] = {}
-    full_path = input('Enter full osu/songs path: ')
+    full_path = input("Enter full osu/songs path: ")
     config["osu_songs"]["path"] = full_path
     with open(cfg_path, "w") as cfg:
         config.write(cfg)
@@ -79,7 +80,7 @@ parser.add_argument(
     "--inverse", "-i", action="store_true", dest="inverse", help="inverse regex search"
 )
 parser.add_argument(
-    "--loopify", "-l", action="store_true", dest="loops", help="create loops "
+    "--steam", "-s", action="store_true", dest="to_steam", help="export  to steam"
 )
 args = parser.parse_args()
 osu_file_format = Template(
@@ -145,17 +146,18 @@ SliderTickRate:1
 )
 
 
-def get_songs():
+def get_songs(pathlib_object):
+    """traverse osu/songs path, find *.osu files,get paths to audio"""
 
     songdirs = []
-    for song_dir in p.iterdir():
+    for song_dir in pathlib_object.iterdir():
         # is it osu beatmap?
         if str(song_dir.name).split()[0].isdigit():
             # check if there is osu file in directory, this might happen if you deleted all song difs
             if list(song_dir.glob("*.osu")):
                 songdirs.append(str(song_dir.name))
 
-    paths = [p.joinpath(i) for i in songdirs]
+    paths = [pathlib_object.joinpath(i) for i in songdirs]
     audios = []
     osufiles = []
     for i in paths:
@@ -264,7 +266,7 @@ def generate_hashes(osudict):
 
 
 def nextint(f):
-    return struct.unpack("<I", f.read(4))[0]
+    return unpack("<I", f.read(4))[0]
 
 
 def nextstr(f):
@@ -282,6 +284,7 @@ def nextstr(f):
 
 
 def get_collections():
+    """read .db file, return raw collection"""
     col = {}
     f = open(collection_db, "rb")
     version = nextint(f)
@@ -333,6 +336,7 @@ def write_string(file, string):
 
 
 def update_collection(list_of_song_names, name, osudict=None):
+    """manually add beatmaps to .db file"""
     backup_db = collection_db.parents[0] / "OPLbackup_collection.db"
     # read version ,count
     collection_dict, version = get_collections()
@@ -344,7 +348,7 @@ def update_collection(list_of_song_names, name, osudict=None):
     for h in list_of_song_names:
         for difficultly_hash in md5s[h]:
             hashes.append(difficultly_hash)
-    timestamp = str(int(time.time()))
+    timestamp = str(int(time()))
     name = name + " " + timestamp
     collection_dict[name] = hashes
     with open(collection_db, "wb") as f:
@@ -362,6 +366,7 @@ def update_collection(list_of_song_names, name, osudict=None):
 
 
 def import_songs_as_collection(path_with_mp3s, collection_name):
+    """import mp3 files as fake beatmaps"""
     # hit F5 in song menu in oss
 
     mp3s = [mp3_path for mp3_path in Path(path_with_mp3s).glob("*.mp3")]
@@ -399,8 +404,9 @@ def import_songs_as_collection(path_with_mp3s, collection_name):
     update_collection(list_of_song_names, collection_name, osudict=osudict)
 
 
-def collection_content(collection_name):
-    name = difflib.get_close_matches(
+def collection_content(collection_name, collections, md5s):
+    """read collection name case insensitive with typos,return song list"""
+    name = get_close_matches(
         collection_name.lower(), [c.lower() for c in collections.keys()]
     )
     # https://github.com/psf/requests/blob/master/requests/structures.py
@@ -418,11 +424,12 @@ def collection_content(collection_name):
 
 
 def filter_tags(osudict=None, regtag=None, inverse=False, list_of_song_names=None):
-    """apply regex to tag line of all songs or to a list_of_song_names"""
+    """apply regex to tag line of all songs or to a list_of_song_names, return songlist"""
     regtag = regtag.lower()  # ignore case
     regex = re.compile(regtag)
 
     def group_tags(sn_with_tags):
+        """create 2 groups with one mathching regex, and second not matching"""
         groups = dict()
         f = lambda x: bool(regex.search(x[1]))
         for sn, t in groupby(sn_with_tags, key=f):
@@ -455,6 +462,9 @@ def filter_tags(osudict=None, regtag=None, inverse=False, list_of_song_names=Non
 
 
 def create_playlist(list_of_song_names):
+    if not list_of_song_names:
+        print("list is empty")
+        return
     with open("playlist.m3u8", "w", encoding="utf8") as playlist:
         playlist.write("#EXTM3U" + "\n")
         for sn in list_of_song_names:
@@ -477,6 +487,8 @@ def export_to_dir(list_of_song_names, to_dir="osu_playlist_output"):
 
 
 def apply_daterange(list_of_song_names, daterange=None):
+    """ filter by creation date of audio(from filesystem) , return song list"""
+
     def get_date(datestring):
         format = "%Y.%m.%d"
         date = datetime.strptime(datestring, format)
@@ -485,6 +497,8 @@ def apply_daterange(list_of_song_names, daterange=None):
     sn_date = dict()
     for sn in list_of_song_names:
         # creation date of file https://stackoverflow.com/a/52858040
+        # creation date updates when moving file from one directory
+        # to another , so maybe use modification date
         sn_date[sn] = datetime.fromtimestamp(namedict[sn].stat().st_ctime)
 
     def parse(daterange):
@@ -515,56 +529,151 @@ def apply_daterange(list_of_song_names, daterange=None):
     return sn_list
 
 
-def create_loops(list_of_song_names, osudict):
+def _create_loops(list_of_song_names, osudict):
+    """for use in API
+    create collection with one song in it, for use in standart client (search collection,exit to main menu)
+    note: McOsu can loop song from start without that method"""
     for song in list_of_song_names:
         update_collection([song], song + " LOOP", osudict=osudict)
 
 
-names, namedict, osudict = get_songs()
+def export_m3u8_to_steam(list_of_song_names):
+    """ export m3u8 playlist to steam
+    this will overwrite queue.m3u8 if you have one
+    source: https://steamcommunity.com/groups/steammusic/discussions/1/622954747299287987/
+    overwrite queue.m3u8 while steam is closed
+    --------------------------------
+    Steam browser controls:
+    steam://musicplayer/<command>
+    Commands related to the Steam music player.
+    play
+    pause
+    toggleplaypause
+    playprevious
+    playnext
+    togglemute
+    increasevolume
+    decreasevolume
+    toggleplayingrepeatstatus
+    toggleplayingshuffled   
+    source: https://developer.valvesoftware.com/wiki/Steam_browser_protocol"""
+    if not list_of_song_names:
+        print("list is empty")
+        return
+    try:
+        full_steam_database_path = config["osu_songs"]["steam_path"]
+    except KeyError:
+        full_steam_database_path = input("Enter full Steam/music/_database path: ")
+        config["osu_songs"]["steam_path"] = full_steam_database_path
+        with open(cfg_path, "w") as cfg:
+            config.write(cfg)
+    _path = Path(full_steam_database_path)
+    q = "queue.m3u8"
+    p = _path / q
+    create_playlist(list_of_song_names)
+    with open("playlist.m3u8", "r") as pf:
+        # this playlist can't handle song names,while exported to steam music, instead it is audio name
+        playlist = pf.read()
+    with open(p, "w") as f:
+        f.write(playlist)
+    print("Export to steam complete")
 
-def main(names=names,namedict=namedict,osudict=osudict):
-    """main logic of the program,takes those parameters because of closure"""
+
+names, namedict, osudict = get_songs(pathlib_object=p)
+
+
+def main(names=names, namedict=namedict, osudict=osudict):
+    """main logic ,takes those parameters because of closure
+       nested args parsing return is used to stop execution
+       it may not cover everything
+    """
 
     col_name = args.collection_name
     regtag = args.reg_tag
     to_dir = args.to_dir
-    inverse = args.inverse
+    inverse = args.inverse  # flag
     to_game = args.db_col_name
     daterange = args.date_range
     name = args.name_it
     path_to_mp3s = args.path_to_mp3s
-    loops = args.loops
+    to_steam = args.to_steam  # flag
+    # ----------------------------------------------------
     if col_name:
         md5s = generate_hashes(osudict)
         collections, _version = get_collections()
-        col_list = collection_content(col_name)
+        col_list = collection_content(col_name, collections, md5s)
+        # no regtag & daterange for now
         if to_dir:
             export_to_dir(col_list, to_dir)
-        elif loops:
-            create_loops(col_list, osudict)
+            return
+        if to_steam:
+            export_m3u8_to_steam(col_list)
+            return
         else:
             create_playlist(col_list)
-    elif path_to_mp3s:
+            return
+
+    # ----------------------------------------------------
+    if path_to_mp3s:
         import_songs_as_collection(path_to_mp3s, name)
-    elif regtag:
+        return
+
+    # ----------------------------------------------------
+    if regtag:
         tag_list = filter_tags(osudict, regtag, inverse)
         if daterange:
             tag_list = apply_daterange(tag_list, daterange)
-        elif to_dir:
-            export_to_dir(tag_list, to_dir)
-        elif loops:
-            create_loops(tag_list, osudict)
-        elif to_game:
-            update_collection(tag_list, name=to_game, osudict=osudict)
-        else:
-            create_playlist(tag_list)
-    else:
-        if daterange:
-            names = apply_daterange(names, daterange)
+
+        if to_steam:
+            export_m3u8_to_steam(tag_list)
+            return  # prevent double checking if daterange
         if to_dir:
-            export_to_dir(names, to_dir)
-        # without args
+            export_to_dir(tag_list, to_dir)
+            return
+
+        if to_game:
+            update_collection(tag_list, name=to_game, osudict=osudict)
+            return
+
         else:
+            # create playlist with reg as the only one argument
+            create_playlist(tag_list)
+            return
+
+    # ----------------------------------------------------
+    if daterange:
+        by_date_names = apply_daterange(names, daterange)
+
+        if to_dir:
+            export_to_dir(by_date_names, to_dir)
+            return
+
+        if to_game:
+            update_collection(by_date_names, name=to_game, osudict=osudict)
+            return
+
+        if to_steam:
+            export_m3u8_to_steam(by_date_names)
+            return
+
+        else:
+            # create playlist with daterange as the only one argument
+            create_playlist(by_date_names)
+            return
+    # ----------------------------------------------------
+    if to_dir: # export all mp3 to specified directory
+        export_to_dir(names, to_dir)
+        return
+
+    if to_steam: # overwrite m3u8 queue file as all songs from osu
+        export_m3u8_to_steam(names)
+        return
+
+    else:
+        # create playlist from all songs if none of args is selected
+        if not any(args.__dict__.values()):
             create_playlist(names)
+
+
 if __name__ == "__main__":
     main()
