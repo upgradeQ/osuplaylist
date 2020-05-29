@@ -11,7 +11,7 @@ from datetime import datetime
 from shutil import copy
 from pathlib import Path
 from collections.abc import MutableMapping, Mapping
-from collections import OrderedDict
+from collections import OrderedDict, Counter
 from itertools import groupby
 
 cli_path = Path(__file__).absolute()
@@ -31,7 +31,7 @@ p = Path(config["osu_songs"]["path"])
 # /songs path
 collection_db = p.absolute().parent / "collection.db"
 
-text = "bugs/suggestions ? github.com/hqupgradehq/osuplaylist"
+text = "bugs/suggestions ? github.com/upgradeq/osuplaylist"
 parser = argparse.ArgumentParser(description=text)
 # https://stackoverflow.com/questions/18157376/handle-spaces-in-argparse-input
 parser.add_argument(
@@ -579,6 +579,32 @@ def export_m3u8_to_steam(list_of_song_names):
     print("Export to steam complete")
 
 
+def get_tags(list_of_song_names, osudict):
+    "return 100 most common tags in list_of_song_names , for use in API"
+    if list_of_song_names:
+        # update osudict
+        osudict = {sn: osudict[sn] for sn in list_of_song_names}
+
+    sn_tags = list()
+    for song_name, dot_osu in osudict.items():
+        with open(dot_osu[0], "r", encoding="utf8") as f:
+            for line in f.readlines():
+                if line.startswith("Tags"):
+                    tag_line = line.partition(":")[2].strip()
+                    sn_tags.append([song_name, tag_line.lower()])
+                    break
+    clean_tags = []
+    for song_name, song_tags in sn_tags:
+        s = song_tags.split(" ")
+        stopwords = ["and", "you", "insert", "the", "tag", "your"]
+        for i in s:
+            if len(i) > 2 and i not in stopwords:
+                clean_tags.append(i)
+    tags = Counter(clean_tags).most_common(100)
+
+    return tags
+
+
 names, namedict, osudict = get_songs(pathlib_object=p)
 
 
@@ -661,11 +687,11 @@ def main(names=names, namedict=namedict, osudict=osudict):
             create_playlist(by_date_names)
             return
     # ----------------------------------------------------
-    if to_dir: # export all mp3 to specified directory
+    if to_dir:  # export all mp3 to specified directory
         export_to_dir(names, to_dir)
         return
 
-    if to_steam: # overwrite m3u8 queue file as all songs from osu
+    if to_steam:  # overwrite m3u8 queue file as all songs from osu
         export_m3u8_to_steam(names)
         return
 
