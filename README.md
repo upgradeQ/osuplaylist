@@ -1,5 +1,5 @@
 # osuplaylist
-[![PyPI](https://pypi.org/project/osuplaylist/)](https://img.shields.io/pypi/v/osuplaylist?style=for-the-badge) 
+[![PyPI](https://img.shields.io/pypi/v/osuplaylist?style=for-the-badge)](https://pypi.org/project/osuplaylist) 
 - Extract all osu songs, collection,run a regex search in .osu tag line , apply daterange 
 - Export audio to directory/to ingame collection/to steam queue or create m3u8 playlist
 - Import your songs in .mp3 format to osu
