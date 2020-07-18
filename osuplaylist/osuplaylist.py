@@ -12,6 +12,7 @@ from shutil import copy
 from pathlib import Path
 from collections.abc import MutableMapping, Mapping
 from collections import OrderedDict, Counter
+from concurrent import futures
 from itertools import groupby
 
 cli_path = Path(__file__).absolute()
@@ -146,9 +147,18 @@ SliderTickRate:1
 )
 
 
+def get_audio(_path):
+    osufile = next(Path(_path).glob("*.osu"))
+    with open(osufile, "r", encoding="utf8") as f:
+        for line in f.readlines():
+            if line.startswith("AudioFilename"):
+                audio_filename = line[line.index(":") + 2 :].strip()
+                break
+    return Path(_path, audio_filename)
+
+
 def get_songs(pathlib_object):
     """traverse osu/songs path, find *.osu files,get paths to audio"""
-
     songdirs = []
     for song_dir in pathlib_object.iterdir():
         # is it osu beatmap?
@@ -158,17 +168,10 @@ def get_songs(pathlib_object):
                 songdirs.append(str(song_dir.name))
 
     paths = [pathlib_object.joinpath(i) for i in songdirs]
-    audios = []
-    osufiles = []
-    for i in paths:
-        osufile = [i for i in Path(i).glob("*.osu")]
-        osufiles.append(osufile)
-        with open(osufile[0], "r", encoding="utf8") as f:
-            for line in f.readlines():
-                if line.startswith("AudioFilename"):
-                    audio_filename = line[line.index(":") + 2 :].strip()
-                    break
-        audios.append(Path(i, audio_filename))
+    osufiles = [list((Path(i).glob("*.osu"))) for i in paths]
+    executor = futures.ThreadPoolExecutor()
+    audios = executor.map(get_audio, paths)
+    audios = list(audios)
 
     names = []
     namedict = {}
@@ -179,6 +182,7 @@ def get_songs(pathlib_object):
             temp = temp[:-10]
         temp = " ".join(temp.split()[1:])
         names.append(temp)
+        # in audios[pos] order is still preserved like in paths
         namedict[temp] = audios[pos]
         osudict[temp] = osufiles[pos]
     result = (sorted(list(set(names))), namedict, osudict)
