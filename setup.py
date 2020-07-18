@@ -5,13 +5,13 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="osuplaylist",
-    version="1.1.0",
-    author="upgradehq",
+    version="1.2.0",
+    author="upgradeq",
     author_email="noreply@example.com",
     description="Export audio from osu to directory/to ingame collection/to steam music  or create m3u8 playlist",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/upgradehq/osuplaylist",
+    url="https://github.com/upgradeq/osuplaylist",
     packages=["osuplaylist"],
     entry_points={"console_scripts": ["osuplaylist=osuplaylist.osuplaylist:main"]},
     keywords="osu steam export music filter player playlist utility",
