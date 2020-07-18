@@ -1,7 +1,9 @@
 # osuplaylist
-Extract all osu songs, collection,run a regex search in .osu tag line , apply daterange .    
-Export audio to directory/to ingame collection/to steam queue or create m3u8 playlist.     
-Import your songs in .mp3 format to osu  
+![badge](https://img.shields.io/pypi/v/osuplaylist?style=for-the-badge])  
+- Extract all osu songs, collection,run a regex search in .osu tag line , apply daterange 
+- Export audio to directory/to ingame collection/to steam queue or create m3u8 playlist
+- Import your songs in .mp3 format to osu
+- Use as a module  
 ![screenshot_export_to_steam_from_osu](export.jpg)
 # Installation 
 Python version >= 3.6  
@@ -66,3 +68,6 @@ osuplaylist.export_to_dir(second_search)
 Create issue with bug or feature requests .
 Pull requests regarding things which aren't directly related to the program will not be merged.
 For example, pull requests related to README.md will not be merged, you can open an issue instead.
+# See also 
+- https://github.com/osufiles/osu-bgchanger - A simple tool for automatically changing all your osu! beatmap backgrounds to a custom one .
+- https://github.com/upgradeQ/OSU-STREAM-DETECTOR - osu standard stream map identifier & exporter to ingame collection .
