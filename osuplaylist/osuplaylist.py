@@ -150,7 +150,7 @@ SliderTickRate:1
 def get_audio(_path):
     osufile = next(Path(_path).glob("*.osu"))
     with open(osufile, "r", encoding="utf8") as f:
-        for line in f.readlines():
+        for line in f:
             if line.startswith("AudioFilename"):
                 audio_filename = line[line.index(":") + 2 :].strip()
                 break
