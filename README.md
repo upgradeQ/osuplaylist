@@ -49,20 +49,20 @@ update `pip install osuplaylist -U`
 `osuplaylist -r "stea" -t ">2020.1.1" -s`
 # Using osuplaylist.py as a library
 ```python
-import osuplaylist
-from osuplaylist import osudict, names, namedict
+import osuplaylist.osuplaylist as opl
+from osuplaylist.osuplaylist import osudict, names, namedict
 
 print(len(names))
 # this will filter taglines matching azer or step 
-first_search = osuplaylist.filter_tags(osudict, regtag="(azer|step") 
+first_search = opl.filter_tags(osudict, regtag="(azer|step") 
 print(first_search)
 # this will filter taglines from first_search matching drumstep 
-second_search = osuplaylist.filter_tags(
+second_search = opl.filter_tags(
     osudict, regtag="drumstep", list_of_song_names=first_search
 )
 print(second_search)
 # export to dir
-osuplaylist.export_to_dir(second_search)
+opl.export_to_dir(second_search)
 ```
 # Contribute
 Create issue with bug or feature requests .
