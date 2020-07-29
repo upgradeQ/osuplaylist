@@ -1,0 +1,1 @@
+from .osuplaylist import main

@@ -4,7 +4,7 @@
 - Export audio to directory/to ingame collection/to steam queue or create m3u8 playlist
 - Import your songs in .mp3 format to osu
 - Use as a module  
-![screenshot_export_to_steam_from_osu](export.jpg)
+![screenshot_export_to_steam_from_osu](https://raw.githubusercontent.com/upgradeQ/osuplaylist/master/export.jpg)
 # Installation 
 Python version >= 3.6  
 `pip install osuplaylist`  
