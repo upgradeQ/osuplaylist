@@ -19,7 +19,6 @@ cli_path = Path(__file__).absolute()
 ini = "osu_playlist_config.ini"
 cfg_path = cli_path.parent / ini
 config = configparser.ConfigParser()
-# bug , it somehow creates a new cfg path  if one is not present in current directory
 if not cfg_path.exists():
     config["osu_songs"] = {}
     full_path = input("Enter full osu/songs path: ")
@@ -280,8 +279,8 @@ def nextstr(f):
     shift = 0
     while True:
         byte = ord(f.read(1))
-        len |= (byte & 0b01111111) << shift
-        if (byte & 0b10000000) == 0:
+        len |= (byte & 0x7F) << shift
+        if (byte & 0x80) == 0:
             break
         shift += 7
     return f.read(len).decode("utf-8")
@@ -303,7 +302,7 @@ def get_collections():
     return (col, version)
 
 
-# db write  https://github.com/LoPij/osu-collection-manager/blob/84c1d7dd0136183fad8b46b5e8bf703e81b50c15/osuCollectionManager.py#L148
+# db write  https://github.com/osufiles/osuCollectionManager-backup
 def write_int(file, integer):
     int_b = integer.to_bytes(4, "little")
     file.write(int_b)
@@ -370,8 +369,7 @@ def update_collection(list_of_song_names, name, osudict=None):
 
 
 def import_songs_as_collection(path_with_mp3s, collection_name):
-    """import mp3 files as fake beatmaps"""
-    # hit F5 in song menu in oss
+    """import mp3 files as fake beatmaps hit F5 in song menu in oss"""
 
     mp3s = [mp3_path for mp3_path in Path(path_with_mp3s).glob("*.mp3")]
 
@@ -446,12 +444,11 @@ def filter_tags(osudict=None, regtag=None, inverse=False, list_of_song_names=Non
         return groups
 
     if list_of_song_names:
-        # update osudict
         osudict = {sn: osudict[sn] for sn in list_of_song_names}
     sn_tags = list()
     for song_name, dot_osu in osudict.items():
         with open(dot_osu[0], "r", encoding="utf8") as f:
-            for line in f.readlines():
+            for line in f:
                 if line.startswith("Tags"):
                     tag_line = line.partition(":")[2].strip()
                     sn_tags.append([song_name, tag_line.lower()])
@@ -476,7 +473,7 @@ def create_playlist(list_of_song_names):
             playlist.write(song_name)
             song_path = str(namedict[sn].resolve()) + "\n"
             playlist.write(song_path)
-    print("Playlist created,available songs:", len(list_of_song_names))
+    print("Playlist created[playlist.m3u8],available songs:", len(list_of_song_names))
 
 
 def export_to_dir(list_of_song_names, to_dir="osu_playlist_output"):
@@ -592,7 +589,7 @@ def get_tags(list_of_song_names, osudict):
     sn_tags = list()
     for song_name, dot_osu in osudict.items():
         with open(dot_osu[0], "r", encoding="utf8") as f:
-            for line in f.readlines():
+            for line in f:
                 if line.startswith("Tags"):
                     tag_line = line.partition(":")[2].strip()
                     sn_tags.append([song_name, tag_line.lower()])
@@ -618,6 +615,7 @@ def main(names=names, namedict=namedict, osudict=osudict):
        it may not cover everything
     """
 
+    print("Loading beatmaps...")
     col_name = args.collection_name
     regtag = args.reg_tag
     to_dir = args.to_dir

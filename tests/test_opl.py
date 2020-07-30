@@ -1,7 +1,7 @@
-from osuplaylist import namedict, osudict, names, p
-from osuplaylist import apply_daterange, filter_tags, get_collections, get_songs
-from osuplaylist import export_to_dir
-from osuplaylist import update_collection, generate_hashes, collection_content
+from osuplaylist.osuplaylist import namedict, osudict, names, p
+from osuplaylist.osuplaylist import apply_daterange, filter_tags, get_collections, get_songs
+from osuplaylist.osuplaylist import export_to_dir
+from osuplaylist.osuplaylist import update_collection, generate_hashes, collection_content
 from pathlib import Path
 import pytest
 
