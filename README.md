@@ -12,12 +12,13 @@ update `pip install osuplaylist -U`
 # Limitations
 - creation of ingame collection requires to restart client
 - importing your mp3 requires restart & refresh `F5` & ascii name
-- daterange will not work properly  on linux
 ## Commands
 ### export all songs as .m3u8 playlist, may take a while
   `osuplaylist`
 ### apply daterange (optional)
-  `osuplaylist --date_range "daterange"`,daterange format:Year.month.day example: >2020.1.1 older than, 2020.1.1:2020.1.24 in this range 
+  `osuplaylist --date_range "daterange"`,daterange format:Year.month.day
+  example: >2020.1.1 older than, 2020.1.1:2020.1.24 in this range 
+  this will include songs where you had set score in that timeframe.
 ### export collection. Name might be case insensitive or with typos 
  `osuplaylist --collection "name of collection"`
 ### export to ingame collection. Name will be with current timestamp. (optional)
@@ -65,9 +66,7 @@ print(second_search)
 opl.export_to_dir(second_search)
 ```
 # Contribute
-Create issue with bug or feature requests .
-Pull requests regarding things which aren't directly related to the program will not be merged.
-For example, pull requests related to README.md will not be merged, you can open an issue instead.
+Contributions are welcome!
 # See also 
 - https://github.com/osufiles/osu-bgchanger - A simple tool for automatically changing all your osu! beatmap backgrounds to a custom one .
 - https://github.com/upgradeQ/OSU-STREAM-DETECTOR - osu standard stream map identifier & exporter to ingame collection .

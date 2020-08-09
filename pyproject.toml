@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "osuplaylist"
-version = "2.0.3"
+version = "2.1.0"
 description = "Export audio from osu to directory/to ingame collection/to steam music  or create m3u8 playlist"
 authors = ["upgradeq <noreply@example.com>"]
 readme = "README.md"

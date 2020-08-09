@@ -7,7 +7,7 @@ from difflib import get_close_matches
 from time import time
 from string import Template
 from uuid import uuid1
-from datetime import datetime
+from datetime import datetime, timedelta
 from shutil import copy
 from pathlib import Path
 from collections.abc import MutableMapping, Mapping
@@ -30,6 +30,7 @@ config.read(cfg_path)
 p = Path(config["osu_songs"]["path"])
 # /songs path
 collection_db = p.absolute().parent / "collection.db"
+osu_db = p.absolute().parent / "osu!.db"
 
 text = "bugs/suggestions ? github.com/upgradeq/osuplaylist"
 parser = argparse.ArgumentParser(description=text)
@@ -272,18 +273,132 @@ def nextint(f):
     return unpack("<I", f.read(4))[0]
 
 
+def read_ubyte(f):
+    return unpack("<B", f.read(1))[0]
+
+
 def nextstr(f):
-    if f.read(1) == 0x00:
-        return
-    len = 0
-    shift = 0
-    while True:
-        byte = ord(f.read(1))
-        len |= (byte & 0x7F) << shift
-        if (byte & 0x80) == 0:
-            break
-        shift += 7
-    return f.read(len).decode("utf-8")
+    """ https://github.com/jaasonw/osu-db-tools/blob/9bdd51f60d0f3d1a1541f3f91637f5979cda61b9/buffer.py#L39
+    For the 's' format character, the count is interpreted as the length
+    of the bytes, not a repeat count like for the other format characters; 
+    https://docs.python.org/3/library/struct.html
+    """
+    strlen = 0
+    strflag = read_ubyte(f)
+    if strflag == 0x0B:
+        strlen = 0
+        shift = 0
+        # uleb128
+        # https://en.wikipedia.org/wiki/LEB128
+        while True:
+            byte = read_ubyte(f)
+            strlen |= (byte & 0x7F) << shift
+            if (byte & (1 << 7)) == 0:
+                break
+            shift += 7
+
+    return (unpack("<" + str(strlen) + "s", f.read(strlen))[0]).decode("utf-8")
+
+
+def nextlong(f):
+    return unpack("<Q", f.read(8))[0]
+
+
+offsets = {
+    "byte": 1,
+    "short": 2,
+    "int": 4,
+    "long": 8,
+    "single": 4,
+    "double": 8,
+    "bool": 1,
+    "datetime": 8,
+}
+
+
+def skip(_f, offset):
+    return _f.read(offset)
+
+
+def read_double_pair(_f):
+    i = nextint(_f)
+    for _ in range(i):
+        skip(_f, offsets["byte"])
+        skip(_f, offsets["int"])
+        skip(_f, offsets["byte"])
+        skip(_f, offsets["double"])
+
+
+def read_timings(_f):
+    i = nextint(_f)
+    for _ in range(i):
+        skip(_f, offsets["double"])
+        skip(_f, offsets["double"])
+        skip(_f, offsets["bool"])
+
+
+def read_beatmap(f, version):
+    """https://osu.ppy.sh/help/wiki/osu!_File_Formats/Db_(file_format) """
+
+    if version <= 20191106:
+        skip(f, offsets["int"])
+    else:
+        pass
+
+    nextstr(f)  # artist
+    nextstr(f)  # unicode
+    nextstr(f)  # song
+    nextstr(f)  #  unicode
+    nextstr(f)  # mapper
+    nextstr(f)  # diff
+    nextstr(f)  # audio
+    md5_hash = nextstr(f)
+    nextstr(f)  # .osu
+    skip(f, offsets["byte"])  # ranked
+    skip(f, offsets["short"])  # ...
+    skip(f, offsets["short"])  # ...
+    skip(f, offsets["short"])  # spinner
+    skip(f, offsets["long"])  # modif
+    skip(f, offsets["single"])  # ar
+    skip(f, offsets["single"])  # cs
+    skip(f, offsets["single"])  # hp
+    skip(f, offsets["single"])  # od
+    skip(f, offsets["double"])  # slider
+    read_double_pair(f)
+    read_double_pair(f)
+    read_double_pair(f)
+    read_double_pair(f)
+    skip(f, offsets["int"])  # drain
+    skip(f, offsets["int"])  # total
+    skip(f, offsets["int"])  # start
+    read_timings(f)
+    skip(f, offsets["int"])
+    nextint(f)  # set id
+    skip(f, offsets["int"])  # thread
+    skip(f, offsets["byte"])
+    skip(f, offsets["byte"])
+    skip(f, offsets["byte"])
+    skip(f, offsets["byte"])  # mania
+    skip(f, offsets["short"])
+    skip(f, offsets["single"])
+    skip(f, offsets["byte"])  # game mode
+    nextstr(f)  # song source
+    nextstr(f)  # song tags
+    skip(f, offsets["short"])
+    nextstr(f)  # font
+    skip(f, offsets["bool"])
+    last_time_played = nextlong(f)
+    skip(f, offsets["bool"])
+    nextstr(f)  # folder
+    skip(f, offsets["long"])
+    skip(f, offsets["bool"])  # sound
+    skip(f, offsets["bool"])
+    skip(f, offsets["bool"])
+    skip(f, offsets["bool"])
+    skip(f, offsets["bool"])  # visual
+    skip(f, offsets["int"])
+    skip(f, offsets["byte"])
+    return (md5_hash, last_time_played)
 
 
 def get_collections():
@@ -300,6 +415,54 @@ def get_collections():
             col[colname].append(f.read(32).decode("utf-8"))
     f.close()
     return (col, version)
+
+
+def get_recent(osudict):
+    """read osu.db file, return songs
+     sorted by last set score"""
+
+    def convert_dotnet_tick(ticks):
+        # source https://gist.github.com/gamesbook/03d030b7b79370fb6b2a67163a8ac3b5
+        """Convert .NET ticks to datetime object
+        Args:
+            ticks: integer
+                i.e 100 nanosecond increments since 1/1/1 AD"""
+        _date = datetime(1, 1, 1) + timedelta(microseconds=ticks // 10)
+        return _date
+
+    f = open(osu_db, "rb")
+    version = nextint(f)
+    skip(f, offsets["int"])  # folder
+    skip(f, offsets["bool"])  # acc
+    skip(f, offsets["datetime"])  # dt
+    nextstr(f)  # nick
+    beatmap_number = nextint(f)
+
+    # {songname : [[hash,date],...],...}
+    dt_sn = dict()
+    for _ in range(beatmap_number):
+        m, d = read_beatmap(f, version)
+        d = convert_dotnet_tick(d)
+        dt_sn[m] = d
+
+    # {songname : [hash,date],...}
+    sn_dates = dict()
+    md5s = generate_hashes(osudict)
+    for sn, hashes in md5s.items():
+        try:
+            song_hashes_date = []
+            for h in hashes:
+                song_hashes_date.append([h, dt_sn[h]])
+            most_recent = max(song_hashes_date, key=lambda i: i[1])
+            sn_dates[sn] = most_recent
+        except KeyError:
+            continue
+
+    songs_by_date = {  # {sn:date}
+        k: v[1] for k, v in sorted(sn_dates.items(), key=lambda i: i[1][1])
+    }
+    f.close()
+    return songs_by_date
 
 
 # db write  https://github.com/osufiles/osuCollectionManager-backup
@@ -487,7 +650,7 @@ def export_to_dir(list_of_song_names, to_dir="osu_playlist_output"):
     print("Songs export complete,quantity: ", len(list_of_song_names))
 
 
-def apply_daterange(list_of_song_names, daterange=None):
+def apply_daterange(list_of_song_names, daterange=None, osudict=None):
     """ filter by creation date of audio(from filesystem) , return song list"""
 
     def get_date(datestring):
@@ -495,12 +658,7 @@ def apply_daterange(list_of_song_names, daterange=None):
         date = datetime.strptime(datestring, format)
         return date
 
-    sn_date = dict()
-    for sn in list_of_song_names:
-        # creation date of file https://stackoverflow.com/a/52858040
-        # creation date updates when moving file from one directory
-        # to another , so maybe use modification date
-        sn_date[sn] = datetime.fromtimestamp(namedict[sn].stat().st_ctime)
+    sn_date = get_recent(osudict)
 
     def parse(daterange):
         list_of_song_names = list()
@@ -650,7 +808,7 @@ def main(names=names, namedict=namedict, osudict=osudict):
     if regtag:
         tag_list = filter_tags(osudict, regtag, inverse)
         if daterange:
-            tag_list = apply_daterange(tag_list, daterange)
+            tag_list = apply_daterange(tag_list, daterange, osudict)
 
         if to_steam:
             export_m3u8_to_steam(tag_list)
@@ -670,7 +828,7 @@ def main(names=names, namedict=namedict, osudict=osudict):
 
     # ----------------------------------------------------
     if daterange:
-        by_date_names = apply_daterange(names, daterange)
+        by_date_names = apply_daterange(names, daterange, osudict)
 
         if to_dir:
             export_to_dir(by_date_names, to_dir)
