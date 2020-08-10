@@ -658,6 +658,9 @@ def apply_daterange(list_of_song_names, daterange=None, osudict=None):
         date = datetime.strptime(datestring, format)
         return date
 
+    if list_of_song_names:
+        osudict = {sn: osudict[sn] for sn in list_of_song_names}
+
     sn_date = get_recent(osudict)
 
     def parse(daterange):
