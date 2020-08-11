@@ -651,7 +651,7 @@ def export_to_dir(list_of_song_names, to_dir="osu_playlist_output"):
 
 
 def apply_daterange(list_of_song_names, daterange=None, osudict=None):
-    """ filter by creation date of audio(from filesystem) , return song list"""
+    """ filter by last time played , return song list"""
 
     def get_date(datestring):
         format = "%Y.%m.%d"
@@ -791,7 +791,6 @@ def main(names=names, namedict=namedict, osudict=osudict):
         md5s = generate_hashes(osudict)
         collections, _version = get_collections()
         col_list = collection_content(col_name, collections, md5s)
-        # no regtag & daterange for now
         if to_dir:
             export_to_dir(col_list, to_dir)
             return

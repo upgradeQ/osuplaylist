@@ -18,7 +18,7 @@ update `pip install osuplaylist -U`
 ### apply daterange (optional)
   `osuplaylist --date_range "daterange"`,daterange format:Year.month.day
   example: >2020.1.1 older than, 2020.1.1:2020.1.24 in this range 
-  this will include songs where you had set score in that timeframe.
+  this will include last played beatmaps in that timeframe.
 ### export collection. Name might be case insensitive or with typos 
  `osuplaylist --collection "name of collection"`
 ### export to ingame collection. Name will be with current timestamp. (optional)
