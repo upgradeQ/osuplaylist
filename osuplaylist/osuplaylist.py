@@ -1,7 +1,6 @@
 import argparse
 import configparser
 import re
-import hashlib
 from struct import unpack
 from difflib import get_close_matches
 from time import time
@@ -11,8 +10,7 @@ from datetime import datetime, timedelta
 from shutil import copy
 from pathlib import Path
 from collections.abc import MutableMapping, Mapping
-from collections import OrderedDict, Counter
-from concurrent import futures
+from collections import OrderedDict, Counter, defaultdict
 from itertools import groupby
 
 cli_path = Path(__file__).absolute()
@@ -147,48 +145,6 @@ SliderTickRate:1
 )
 
 
-def get_audio(_path):
-    osufile = next(Path(_path).glob("*.osu"))
-    with open(osufile, "r", encoding="utf8") as f:
-        for line in f:
-            if line.startswith("AudioFilename"):
-                audio_filename = line[line.index(":") + 2 :].strip()
-                break
-    return Path(_path, audio_filename)
-
-
-def get_songs(pathlib_object):
-    """traverse osu/songs path, find *.osu files,get paths to audio"""
-    songdirs = []
-    for song_dir in pathlib_object.iterdir():
-        # is it osu beatmap?
-        if str(song_dir.name).split()[0].isdigit():
-            # check if there is osu file in directory, this might happen if you deleted all song difs
-            if list(song_dir.glob("*.osu")):
-                songdirs.append(str(song_dir.name))
-
-    paths = [pathlib_object.joinpath(i) for i in songdirs]
-    osufiles = [list((Path(i).glob("*.osu"))) for i in paths]
-    executor = futures.ThreadPoolExecutor()
-    audios = executor.map(get_audio, paths)
-    audios = list(audios)
-
-    names = []
-    namedict = {}
-    osudict = {}
-    for pos, i in enumerate(songdirs):
-        temp = i
-        if i.endswith("[no video]"):
-            temp = temp[:-10]
-        temp = " ".join(temp.split()[1:])
-        names.append(temp)
-        # in audios[pos] order is still preserved like in paths
-        namedict[temp] = audios[pos]
-        osudict[temp] = osufiles[pos]
-    result = (sorted(list(set(names))), namedict, osudict)
-    return result
-
-
 class CaseInsensitiveDict(MutableMapping):
     """A case-insensitive ``dict``-like object.
     Implements all methods and operations of
@@ -252,21 +208,6 @@ class CaseInsensitiveDict(MutableMapping):
 
     def __repr__(self):
         return str(dict(self.items()))
-
-
-def md5(fname):
-    hash_md5 = hashlib.md5()
-    with open(fname, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            hash_md5.update(chunk)
-    return hash_md5.hexdigest()
-
-
-def generate_hashes(osudict):
-    md5s = {}
-    for i in osudict:
-        md5s[i] = [md5(j) for j in osudict[i]]
-    return md5s
 
 
 def nextint(f):
@@ -337,7 +278,7 @@ def read_timings(_f):
         skip(_f, offsets["bool"])
 
 
-def read_beatmap(f, version):
+def read_beatmap_song(f, version):
     """https://osu.ppy.sh/help/wiki/osu!_File_Formats/Db_(file_format) """
 
     if version <= 20191106:
@@ -345,15 +286,15 @@ def read_beatmap(f, version):
     else:
         pass
 
-    nextstr(f)  # artist
+    artist = nextstr(f)  # artist
     nextstr(f)  # unicode
-    nextstr(f)  # song
+    title = nextstr(f)  # song
     nextstr(f)  #  unicode
     nextstr(f)  # mapper
     nextstr(f)  # diff
-    nextstr(f)  # audio
+    audio_file = nextstr(f)  # audio
     md5_hash = nextstr(f)
-    nextstr(f)  # .osu
+    osu_file = nextstr(f)  # .osu
     skip(f, offsets["byte"])  # ranked
     skip(f, offsets["short"])  # ...
     skip(f, offsets["short"])  # ...
@@ -373,7 +314,7 @@ def read_beatmap(f, version):
     skip(f, offsets["int"])  # start
     read_timings(f)
     skip(f, offsets["int"])
-    nextint(f)  # set id
+    set_id = nextint(f)  # set id
     skip(f, offsets["int"])  # thread
     skip(f, offsets["byte"])
     skip(f, offsets["byte"])
@@ -383,13 +324,13 @@ def read_beatmap(f, version):
     skip(f, offsets["single"])
     skip(f, offsets["byte"])  # game mode
     nextstr(f)  # song source
-    nextstr(f)  # song tags
+    tags = nextstr(f)  # song tags
     skip(f, offsets["short"])
     nextstr(f)  # font
     skip(f, offsets["bool"])
     last_time_played = nextlong(f)
     skip(f, offsets["bool"])
-    nextstr(f)  # folder
+    folder_name = nextstr(f)  # folder
     skip(f, offsets["long"])
     skip(f, offsets["bool"])  # sound
     skip(f, offsets["bool"])
@@ -398,7 +339,51 @@ def read_beatmap(f, version):
     skip(f, offsets["bool"])  # visual
     skip(f, offsets["int"])
     skip(f, offsets["byte"])
-    return (md5_hash, last_time_played)
+    return {
+        "artist": artist,
+        "title": title,
+        "set_id": set_id,
+        "folder_name": folder_name,
+        "audio_file": audio_file,
+        "osu_file": osu_file,
+        "tags": tags,
+        "md5_hash": md5_hash,
+        "last_time_played": last_time_played,
+    }
+
+
+def get_songs():
+    f = open(osu_db, "rb")
+    version = nextint(f)
+    skip(f, offsets["int"])  # folder
+    skip(f, offsets["bool"])  # acc
+    skip(f, offsets["datetime"])  # dt
+    nextstr(f)  # nick
+    beatmap_number = nextint(f)
+
+    beatmaps = list()
+    for _ in range(beatmap_number):
+        beatmaps.append(read_beatmap_song(f, version))
+
+    names = list()
+    tagdict = dict()
+    osudict = defaultdict(list)
+    hashdict = defaultdict(list)
+    namedict = dict()
+    datedict = dict()
+
+    for i in beatmaps:
+        # create pathlib objects
+        audio = p / i["folder_name"] / i["audio_file"]
+        name = i["artist"] + " - " + i["title"]
+        names.append(name)
+        tagdict[name] = i["tags"]
+        namedict[name] = audio
+        osudict[name].append(p / i["folder_name"] / i["osu_file"])
+        hashdict[name].append(i["md5_hash"])
+        datedict[i["md5_hash"]] = i["last_time_played"]
+
+    return (list(set(names)), namedict, osudict, tagdict, hashdict, datedict)
 
 
 def get_collections():
@@ -417,7 +402,7 @@ def get_collections():
     return (col, version)
 
 
-def get_recent(osudict):
+def get_recent(hashdict, datedict, osudict):
     """read osu.db file, return songs
      sorted by last set score"""
 
@@ -430,25 +415,18 @@ def get_recent(osudict):
         _date = datetime(1, 1, 1) + timedelta(microseconds=ticks // 10)
         return _date
 
-    f = open(osu_db, "rb")
-    version = nextint(f)
-    skip(f, offsets["int"])  # folder
-    skip(f, offsets["bool"])  # acc
-    skip(f, offsets["datetime"])  # dt
-    nextstr(f)  # nick
-    beatmap_number = nextint(f)
-
-    # {songname : [[hash,date],...],...}
+    # {hash:date,...}
     dt_sn = dict()
-    for _ in range(beatmap_number):
-        m, d = read_beatmap(f, version)
-        d = convert_dotnet_tick(d)
-        dt_sn[m] = d
+    for md5hash, longtick in datedict.items():
+        dt_object = convert_dotnet_tick(longtick)
+        dt_sn[md5hash] = dt_object
 
     # {songname : [hash,date],...}
     sn_dates = dict()
-    md5s = generate_hashes(osudict)
-    for sn, hashes in md5s.items():
+
+    hashdict = {sn: hashes for sn, hashes in hashdict.items() if sn in osudict}
+
+    for sn, hashes in hashdict.items():
         try:
             song_hashes_date = []
             for h in hashes:
@@ -461,7 +439,6 @@ def get_recent(osudict):
     songs_by_date = {  # {sn:date}
         k: v[1] for k, v in sorted(sn_dates.items(), key=lambda i: i[1][1])
     }
-    f.close()
     return songs_by_date
 
 
@@ -501,7 +478,7 @@ def write_string(file, string):
         file.write(result)
 
 
-def update_collection(list_of_song_names, name, osudict=None):
+def update_collection(list_of_song_names, name, osudict=None, hashdict=None):
     """manually add beatmaps to .db file"""
     backup_db = collection_db.parents[0] / "OPLbackup_collection.db"
     # read version ,count
@@ -509,7 +486,7 @@ def update_collection(list_of_song_names, name, osudict=None):
     # copy as backup.db , osu client on launch will create .bak also
     if not backup_db.exists():
         copy(collection_db, backup_db)
-    md5s = generate_hashes(osudict)
+    md5s = hashdict
     hashes = []
     for h in list_of_song_names:
         for difficultly_hash in md5s[h]:
@@ -531,7 +508,7 @@ def update_collection(list_of_song_names, name, osudict=None):
     print("Export to db complete,quantity: ", len(list_of_song_names))
 
 
-def import_songs_as_collection(path_with_mp3s, collection_name):
+def import_songs_as_collection(path_with_mp3s, collection_name,hashdict=None):
     """import mp3 files as fake beatmaps hit F5 in song menu in oss"""
 
     mp3s = [mp3_path for mp3_path in Path(path_with_mp3s).glob("*.mp3")]
@@ -566,7 +543,8 @@ def import_songs_as_collection(path_with_mp3s, collection_name):
         return list_of_song_names, osudict
 
     list_of_song_names, osudict = create_fake_osu_beatmaps(mp3s)
-    update_collection(list_of_song_names, collection_name, osudict=osudict)
+    update_collection(list_of_song_names, collection_name, osudict=osudict,hashdict=hashdict)
+    print('import mp3s to game collection complete')
 
 
 def collection_content(collection_name, collections, md5s):
@@ -588,7 +566,9 @@ def collection_content(collection_name, collections, md5s):
     return result
 
 
-def filter_tags(osudict=None, regtag=None, inverse=False, list_of_song_names=None):
+def filter_tags(
+    osudict=None, regtag=None, inverse=False, list_of_song_names=None, tagdict=None
+):
     """apply regex to tag line of all songs or to a list_of_song_names, return songlist"""
     regtag = regtag.lower()  # ignore case
     regex = re.compile(regtag)
@@ -609,13 +589,9 @@ def filter_tags(osudict=None, regtag=None, inverse=False, list_of_song_names=Non
     if list_of_song_names:
         osudict = {sn: osudict[sn] for sn in list_of_song_names}
     sn_tags = list()
-    for song_name, dot_osu in osudict.items():
-        with open(dot_osu[0], "r", encoding="utf8") as f:
-            for line in f:
-                if line.startswith("Tags"):
-                    tag_line = line.partition(":")[2].strip()
-                    sn_tags.append([song_name, tag_line.lower()])
-                    break
+    for song_name, _ in osudict.items():
+        tag_line = tagdict[song_name]
+        sn_tags.append([song_name, tag_line.lower()])
     _tags = group_tags(sn_tags)
     try:
         sn_list = [r[0] for r in _tags[bool(not inverse)]]
@@ -639,18 +615,24 @@ def create_playlist(list_of_song_names):
     print("Playlist created[playlist.m3u8],available songs:", len(list_of_song_names))
 
 
-def export_to_dir(list_of_song_names, to_dir="osu_playlist_output"):
+def export_to_dir(list_of_song_names,namedict,to_dir="osu_playlist_output"):
     to_dir = Path(str(to_dir))
     if not to_dir.exists():
         to_dir.mkdir()
     for sn in list_of_song_names:
         from_dir = str(namedict[sn])
         end_dir = str(to_dir / sn) + str(namedict[sn].suffix)
-        copy(from_dir, end_dir)
+        print("from",end_dir)
+        try:
+            copy(from_dir, end_dir)
+        except:
+            print('Failed to copy file')
     print("Songs export complete,quantity: ", len(list_of_song_names))
 
 
-def apply_daterange(list_of_song_names, daterange=None, osudict=None):
+def apply_daterange(
+    list_of_song_names, daterange=None, osudict=None, hashdict=None, datedict=None
+):
     """ filter by last time played , return song list"""
 
     def get_date(datestring):
@@ -661,7 +643,7 @@ def apply_daterange(list_of_song_names, daterange=None, osudict=None):
     if list_of_song_names:
         osudict = {sn: osudict[sn] for sn in list_of_song_names}
 
-    sn_date = get_recent(osudict)
+    sn_date = get_recent(hashdict, datedict, osudict)
 
     def parse(daterange):
         list_of_song_names = list()
@@ -689,14 +671,6 @@ def apply_daterange(list_of_song_names, daterange=None, osudict=None):
 
     sn_list = parse(daterange)
     return sn_list
-
-
-def _create_loops(list_of_song_names, osudict):
-    """for use in API
-    create collection with one song in it, for use in standart client (search collection,exit to main menu)
-    note: McOsu can loop song from start without that method"""
-    for song in list_of_song_names:
-        update_collection([song], song + " LOOP", osudict=osudict)
 
 
 def export_m3u8_to_steam(list_of_song_names):
@@ -767,10 +741,17 @@ def get_tags(list_of_song_names, osudict):
     return tags
 
 
-names, namedict, osudict = get_songs(pathlib_object=p)
+names, namedict, osudict, tagdict, hashdict, datedict = get_songs()
 
 
-def main(names=names, namedict=namedict, osudict=osudict):
+def main(
+    names=names,
+    namedict=namedict,
+    osudict=osudict,
+    tagdict=tagdict,
+    hashdict=hashdict,
+    datedict=datedict,
+):
     """main logic ,takes those parameters because of closure
        nested args parsing return is used to stop execution
        it may not cover everything
@@ -788,11 +769,11 @@ def main(names=names, namedict=namedict, osudict=osudict):
     to_steam = args.to_steam  # flag
     # ----------------------------------------------------
     if col_name:
-        md5s = generate_hashes(osudict)
+        md5s = hashdict
         collections, _version = get_collections()
         col_list = collection_content(col_name, collections, md5s)
         if to_dir:
-            export_to_dir(col_list, to_dir)
+            export_to_dir(col_list,namedict, to_dir)
             return
         if to_steam:
             export_m3u8_to_steam(col_list)
@@ -803,24 +784,24 @@ def main(names=names, namedict=namedict, osudict=osudict):
 
     # ----------------------------------------------------
     if path_to_mp3s:
-        import_songs_as_collection(path_to_mp3s, name)
+        import_songs_as_collection(path_to_mp3s, name,hashdict=hashdict)
         return
 
     # ----------------------------------------------------
     if regtag:
-        tag_list = filter_tags(osudict, regtag, inverse)
+        tag_list = filter_tags(osudict, regtag, inverse, tagdict=tagdict)
         if daterange:
-            tag_list = apply_daterange(tag_list, daterange, osudict)
+            tag_list = apply_daterange(tag_list, daterange, osudict, hashdict, datedict)
 
         if to_steam:
             export_m3u8_to_steam(tag_list)
             return  # prevent double checking if daterange
         if to_dir:
-            export_to_dir(tag_list, to_dir)
+            export_to_dir(tag_list,namedict, to_dir)
             return
 
         if to_game:
-            update_collection(tag_list, name=to_game, osudict=osudict)
+            update_collection(tag_list, name=to_game, osudict=osudict,hashdict=hashdict)
             return
 
         else:
@@ -830,14 +811,16 @@ def main(names=names, namedict=namedict, osudict=osudict):
 
     # ----------------------------------------------------
     if daterange:
-        by_date_names = apply_daterange(names, daterange, osudict)
+        by_date_names = apply_daterange(names, daterange, osudict, hashdict, datedict)
 
         if to_dir:
-            export_to_dir(by_date_names, to_dir)
+            export_to_dir(by_date_names,namedict, to_dir)
             return
 
         if to_game:
-            update_collection(by_date_names, name=to_game, osudict=osudict)
+            update_collection(
+                by_date_names, name=to_game, osudict=osudict, hashdict=hashdict
+            )
             return
 
         if to_steam:
@@ -850,7 +833,7 @@ def main(names=names, namedict=namedict, osudict=osudict):
             return
     # ----------------------------------------------------
     if to_dir:  # export all mp3 to specified directory
-        export_to_dir(names, to_dir)
+        export_to_dir(names,namedict, to_dir)
         return
 
     if to_steam:  # overwrite m3u8 queue file as all songs from osu

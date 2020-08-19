@@ -70,3 +70,5 @@ Contributions are welcome!
 # See also 
 - https://github.com/osufiles/osu-bgchanger - A simple tool for automatically changing all your osu! beatmap backgrounds to a custom one .
 - https://github.com/upgradeQ/OSU-STREAM-DETECTOR - osu standard stream map identifier & exporter to ingame collection .
+- https://github.com/Piotrekol/CollectionManager - gui collections creator & manager for osu
+- https://gitlab.com/esrh/osu-cplayer - tui (urwid) osu player based on mpv
