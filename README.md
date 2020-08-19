@@ -10,6 +10,7 @@ Python version >= 3.6
 `pip install osuplaylist`  
 update `pip install osuplaylist -U`
 # Limitations
+- refresh `<F5>` if beatmap library is not correct
 - creation of ingame collection requires to restart client
 - importing your mp3 requires restart & refresh `F5` & ascii name
 ## Commands
@@ -47,24 +48,9 @@ update `pip install osuplaylist -U`
 
 `-d` (optional) export .mp3 to directory E:/music/osuplaylist
 ### Example combine regex + daterange + to steam
-`osuplaylist -r "stea" -t ">2020.1.1" -s`
-# Using osuplaylist.py as a library
-```python
-import osuplaylist.osuplaylist as opl
-from osuplaylist.osuplaylist import osudict, names, namedict
-
-print(len(names))
-# this will filter taglines matching azer or step 
-first_search = opl.filter_tags(osudict, regtag="(azer|step") 
-print(first_search)
-# this will filter taglines from first_search matching drumstep 
-second_search = opl.filter_tags(
-    osudict, regtag="drumstep", list_of_song_names=first_search
-)
-print(second_search)
-# export to dir
-opl.export_to_dir(second_search)
-```
+`osuplaylist -r "step" -t ">2020.1.1" -s`
+# Using osuplaylist.py as module
+See [tests](/tests)
 # Contribute
 Contributions are welcome!
 # See also 
